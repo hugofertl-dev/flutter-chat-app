@@ -1,8 +1,11 @@
+import 'package:chat_app/helpers/mostrar_alerta.dart';
+import 'package:chat_app/services/auth_service.dart';
 import 'package:chat_app/widget/boton_azul.dart';
 import 'package:chat_app/widget/custom_input.dart';
 import 'package:chat_app/widget/labels.dart';
 import 'package:chat_app/widget/logo.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class LoginPage extends StatelessWidget {
   @override
@@ -47,9 +50,9 @@ class _Form extends StatefulWidget {
 class __FormState extends State<_Form> {
   final emailCtrl = TextEditingController();
   final passCtrl = TextEditingController();
-
   @override
   Widget build(BuildContext context) {
+    final authService = Provider.of<AuthService>(context);
     return Container(
       margin: EdgeInsets.only(top: 40.0),
       padding: EdgeInsets.symmetric(horizontal: 50.0),
@@ -71,9 +74,20 @@ class __FormState extends State<_Form> {
           ),
           BotonAzul(
             text: 'Ingrese',
-            onPressed: () {
-              print(emailCtrl.text);
-            },
+            onPressed: authService.autenticando
+                ? null
+                : () async {
+                    FocusScope.of(context).unfocus();
+                    final loginOk = await authService.login(
+                        emailCtrl.text.trim(), passCtrl.text.trim());
+                    if (loginOk) {
+                      //TODO conectar a nuestro sotcket server
+                      Navigator.pushReplacementNamed(context, 'usuarios');
+                    } else {
+                      mostraAlerta(context, 'Login Incorrecto',
+                          'Revise sus Credenciales nuevamente');
+                    }
+                  },
           ),
         ],
       ),
