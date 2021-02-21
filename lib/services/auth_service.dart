@@ -57,7 +57,6 @@ class AuthService with ChangeNotifier {
       final loginResponse = loginResponseFromJson(resp.body);
       this._usuario = loginResponse.usuario;
       await this._guardarToke(loginResponse.token);
-      //TODO: guardar Token
       return true;
     } else {
       return false;

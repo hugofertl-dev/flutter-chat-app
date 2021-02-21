@@ -1,8 +1,12 @@
 import 'dart:io';
 
+import 'package:chat_app/services/auth_service.dart';
+import 'package:chat_app/services/chat_service.dart';
+import 'package:chat_app/services/socket_service.dart';
 import 'package:chat_app/widget/chat_message.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class ChatPage extends StatefulWidget {
   @override
@@ -13,11 +17,55 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
   final _textController = TextEditingController();
   final _focusNode = FocusNode();
 
+  ChatService chatService;
+  SocketService socketService;
+  AuthService authService;
+
   List<ChatMessage> _messages = [];
 
   bool _estaEscribiendo = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    this.chatService = Provider.of<ChatService>(context, listen: false);
+    this.socketService = Provider.of<SocketService>(context, listen: false);
+    this.authService = Provider.of<AuthService>(context, listen: false);
+
+    this.socketService.socket.on('mensaje-personal', _escucharMensaje);
+    _cargarHistorial(this.chatService.usuarioPara.uid);
+  }
+
+  void _cargarHistorial(String usuarioId) async {
+    final chat = await this.chatService.getChat(usuarioId);
+    final historia = chat.map((msj) => ChatMessage(
+        texto: msj.mensaje,
+        uid: msj.de,
+        animationController: AnimationController(
+            vsync: this, duration: Duration(milliseconds: 0))
+          ..forward()));
+    setState(() {
+      _messages.insertAll(0, historia);
+    });
+  }
+
+  _escucharMensaje(dynamic pyload) {
+    ChatMessage message = new ChatMessage(
+        texto: pyload['mensaje'],
+        uid: pyload['de'],
+        animationController: AnimationController(
+            vsync: this, duration: Duration(milliseconds: 300)));
+    setState(() {
+      _messages.insert(0, message);
+    });
+    message.animationController.forward();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final usuarioPara = this.chatService.usuarioPara;
+
     return Scaffold(
       appBar: AppBar(
           centerTitle: true,
@@ -26,7 +74,8 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
           title: Column(
             children: [
               CircleAvatar(
-                child: Text('Te', style: TextStyle(fontSize: 12.0)),
+                child: Text(usuarioPara.nombre.substring(0, 2),
+                    style: TextStyle(fontSize: 12.0)),
                 backgroundColor: Colors.blue[100],
                 maxRadius: 14.0,
               ),
@@ -34,7 +83,7 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
                 height: 3.0,
               ),
               Text(
-                'Melissa Flores',
+                usuarioPara.nombre,
                 style: TextStyle(color: Colors.black87, fontSize: 12.0),
               )
             ],
@@ -123,7 +172,7 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
 
     final newMessage = new ChatMessage(
       texto: texto,
-      uid: '123',
+      uid: authService.usuario.uid,
       animationController: AnimationController(
           vsync: this, duration: Duration(milliseconds: 200)),
     );
@@ -133,15 +182,22 @@ class _ChatPageState extends State<ChatPage> with TickerProviderStateMixin {
     setState(() {
       _estaEscribiendo = false;
     });
-    print('texto: $texto');
+
+    this.socketService.socket.emit('mensaje-personal', {
+      'de': this.authService.usuario.uid,
+      'para': this.chatService.usuarioPara.uid,
+      'mensaje': texto
+    });
   }
 
   @override
   void dispose() {
-    //TODO off del stocket
     for (ChatMessage message in _messages) {
       message.animationController.dispose();
     }
+    //con esto lo que hago es que no siga escuchado el socket una vez que cierro la ventana
+    //para evitar trafico inecesario
+    this.socketService.socket.off('mensaje-personal');
     super.dispose();
   }
 }
